@@ -1,0 +1,19 @@
+Start
+  |
+  v
+[Input File Level Duplicate Check] ---\
+  |                                     \
+  v                                      v
+[Record Level Duplicate Check] -----> [Split Transit Record]
+  |                                     |
+  v                                      v
+[Missing Lookup Record Handling] ------>[Reprocess Rejected Records]
+  |                                     |
+  v                                      v
+[Back Dated Loading] ----------------->[Processing Speed]
+  |                                     |
+  v                                      v
+[Hardware Benchmark] -----------------> [Input File Log]
+  |
+  v
+ End
