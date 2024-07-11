@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col
+from pyspark.sql.functions import input_file_name, col, when
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -10,7 +10,7 @@ spark = SparkSession.builder \
 
 # HDFS input and output paths
 input_path = "hdfs://JBDLha/Apps/warehouse/invotp/med/"
-output_path = "hdfs://JBDLHa/Apps/warehouse/invotp/processed/"
+output_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed/"
 processed_files_log_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed_files_log.csv"
 
 # Schema for the processed files log
@@ -61,27 +61,27 @@ def process_cdr_data(df):
         StructField("Field20", StringType(), True)
     ])
     
-    # Convert fixed-length records to DataFrame with specified schema
-    df = df.withColumn("Field1", col("value").substr(1, 21)) \
-           .withColumn("Field2", col("value").substr(22, 20)) \
-           .withColumn("Field3", col("value").substr(42, 8)) \
-           .withColumn("Field4", col("value").substr(50, 8)) \
-           .withColumn("Field5", col("value").substr(58, 10)) \
-           .withColumn("Field6", col("value").substr(68, 28)) \
-           .withColumn("Field7", col("value").substr(96, 28)) \
-           .withColumn("Field8", col("value").substr(124, 20)) \
-           .withColumn("Field9", col("value").substr(144, 20)) \
-           .withColumn("Field10", col("value").substr(164, 14)) \
-           .withColumn("Field11", col("value").substr(178, 14)) \
-           .withColumn("Field12", col("value").substr(192, 1)) \
-           .withColumn("Field13", col("value").substr(193, 15)) \
-           .withColumn("Field14", col("value").substr(208, 8)) \
-           .withColumn("Field15", col("value").substr(216, 40)) \
-           .withColumn("Field16", col("value").substr(256, 2)) \
-           .withColumn("Field17", col("value").substr(258, 20)) \
-           .withColumn("Field18", col("value").substr(278, 30)) \
-           .withColumn("Field19", col("value").substr(308, 30)) \
-           .withColumn("Field20", col("value").substr(338, 2))
+    # Convert fixed-length records to DataFrame with specified schema and handle NULL replacements
+    df = df.withColumn("Field1", when(col("value").substr(1, 21).eqNullSafe(''), 'NULL').otherwise(col("value").substr(1, 21))) \
+           .withColumn("Field2", when(col("value").substr(22, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(22, 20))) \
+           .withColumn("Field3", when(col("value").substr(42, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(42, 8))) \
+           .withColumn("Field4", when(col("value").substr(50, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(50, 8))) \
+           .withColumn("Field5", when(col("value").substr(58, 10).eqNullSafe(''), 'NULL').otherwise(col("value").substr(58, 10))) \
+           .withColumn("Field6", when(col("value").substr(68, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(68, 28))) \
+           .withColumn("Field7", when(col("value").substr(96, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(96, 28))) \
+           .withColumn("Field8", when(col("value").substr(124, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(124, 20))) \
+           .withColumn("Field9", when(col("value").substr(144, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(144, 20))) \
+           .withColumn("Field10", when(col("value").substr(164, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(164, 14))) \
+           .withColumn("Field11", when(col("value").substr(178, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(178, 14))) \
+           .withColumn("Field12", when(col("value").substr(192, 1).eqNullSafe(''), 'NULL').otherwise(col("value").substr(192, 1))) \
+           .withColumn("Field13", when(col("value").substr(193, 15).eqNullSafe(''), 'NULL').otherwise(col("value").substr(193, 15))) \
+           .withColumn("Field14", when(col("value").substr(208, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(208, 8))) \
+           .withColumn("Field15", when(col("value").substr(216, 40).eqNullSafe(''), 'NULL').otherwise(col("value").substr(216, 40))) \
+           .withColumn("Field16", when(col("value").substr(256, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(256, 2))) \
+           .withColumn("Field17", when(col("value").substr(258, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(258, 20))) \
+           .withColumn("Field18", when(col("value").substr(278, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(278, 30))) \
+           .withColumn("Field19", when(col("value").substr(308, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(308, 30))) \
+           .withColumn("Field20", when(col("value").substr(338, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(338, 2)))
     
     # Drop the original value column
     df = df.drop("value")
