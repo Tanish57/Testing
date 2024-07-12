@@ -5,7 +5,8 @@ import csv
 
 # Initialize Spark session
 spark = SparkSession.builder \
-    .appName("CDR Processing") \
+    .master("local[*]") \
+    .config("spark.driver.bindAddress", "127.0.0.1") \
     .getOrCreate()
 
 # HDFS input and output paths
