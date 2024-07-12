@@ -1,94 +1,59 @@
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import expr
 import os
-from datetime import datetime
-import csv
-
+os.environ['PYSPARK_PYTHON']
+ 
 # Initialize Spark session
 spark = SparkSession.builder \
-    .master("local[*]") \
-    .config("spark.driver.bindAddress", "127.0.0.1") \
+    .appName("CDRProcessing") \
+    .config("spark.driver.host", "localhost") \
+    .config("spark.executor.memory", "2g") \
+    .config("spark.executor.cores", "2") \
+    .config("spark.network.timeout", "600s") \
+    .config("spark.executor.heartbeatInterval", "100s") \
+    .config("spark.driver.memory", "2g") \
     .getOrCreate()
-
-# HDFS input and output paths
-input_path = "hdfs://jbdlha/Apps/warehouse/invotp/med/"
-output_path = "hdfs://jbdlha/Apps/warehouse/invotp/processed/"
-
-# Path to the processed files log to track already processed files
-processed_files_log = "hdfs://jBDLH/Apps/warehouse/invotp/processed_files_log.txt"
-
-# Function to read the log of processed files
-def get_processed_files(log_path):
-    if not os.path.exists(log_path):
-        return set()
-    with open(log_path, 'r') as f:
-        return set(f.read().splitlines())
-
-# Function to update the log of processed files
-def update_processed_files(log_path, files):
-    with open(log_path, 'a') as f:
-        f.write('\n'.join(files) + '\n')
-
-# Function to process CDR files
-def process_cdr_file(file_path):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-        processed_data = []
-        for line in lines:
-            # Split fixed length fields to CSV format
-            # Adjust offsets and lengths as per CDR file specification
-            # Example (offsets and lengths are hypothetical):
-            record = [
-                line[0:21].strip(),
-                line[21:41].strip(),
-                line[41:49].strip(),
-                line[49:57].strip(),
-                line[57:67].strip(),
-                line[67:95].strip(),
-                line[95:123].strip(),
-                line[123:143].strip(),
-                line[143:163].strip(),
-                line[163:177].strip(),
-                line[177:191].strip(),
-                line[191:192].strip(),
-                line[192:207].strip(),
-                line[207:215].strip(),
-                line[215:255].strip(),
-                line[255:257].strip(),
-                line[257:277].strip(),
-                line[277:307].strip(),
-                line[307:337].strip(),
-                line[337:339].strip(),
-                # Add more fields as required
-            ]
-            processed_data.append(record)
-    
-    # Define CSV file path
-    output_file = os.path.join(output_path, os.path.basename(file_path).replace('.cdr', '.csv'))
-    
-    # Write processed data to CSV
-    with open(output_file, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        # Write header
-        writer.writerow(['Field1', 'Field2', 'Field3', 'Field4', 'Field5', 'Field6', 'Field7',
-                        'Field8', 'Field9', 'Field10', 'Field11', 'Field12', 'Field13', 'Field14',
-                        'Field15', 'Field16', 'Field17', 'Field18', 'Field19', 'Field20'])  # Adjust headers as needed
-        # Write data
-        writer.writerows(processed_data)
-
-# Main function to run the job
-def main():
-    # Get list of already processed files
-    processed_files = get_processed_files(processed_files_log)
-    
-    # Get list of new files to process
-    files_to_process = [file for file in os.listdir(input_path) if file.endswith('.cdr') and file not in processed_files]
-    
-    # Process each new file
-    for file in files_to_process:
-        process_cdr_file(os.path.join(input_path, file))
-    
-    # Update the log with newly processed files
-    update_processed_files(processed_files_log, files_to_process)
-
-if __name__ == "__main__":
-    main()
+ 
+ 
+ 
+# Define the column names and their fixed lengths
+columns = [
+    "incoming_node", "outgoing_node", "event_start_date", "event_start_time", "event_duration",
+    "anum", "bnum", "incoming_path", "outgoing_path", "incoming_product", "outgoing_product",
+    "event_direction", "discrete_rating_parameter_1", "data_unit", "record_sequence_number",
+    "record_type", "user_summarisation", "user_data", "user_data_2", "link_field", "user_data_3"
+]
+ 
+lengths = [
+    20, 20, 8, 8, 10,
+    28, 28, 20, 20, 14, 14,
+    1, 15, 8, 40,
+    2, 20, 30, 30, 2, 80
+]
+ 
+# Read CDR data from a CSV file
+# Assume the CSV file contains a single column named 'cdr' with fixed-length strings
+cdr_file_path = 'ACC_JIO_CTAS_EAWB2202.20240703155048.9178.65070_BI.cdr'
+cdr_df = spark.read.csv(cdr_file_path, header=True)
+ 
+# Function to split fixed-length data
+def split_fixed_length(line, lengths):
+    positions = [sum(lengths[:i]) for i in range(len(lengths) + 1)]
+    values = [line[positions[i]:positions[i+1]].strip() or 'NA' for i in range(len(lengths))]
+    return values
+ 
+# Split the CDR data
+parsed_data = cdr_df.rdd.map(lambda row: split_fixed_length(row[0], lengths))
+ 
+# Create a DataFrame
+df = parsed_data.toDF(columns)
+ 
+# Show the DataFrame
+df.show(truncate=False)
+ 
+# Write the DataFrame to a CSV file
+output_path = 'parsed_cdr_data'
+df.write.csv(output_path, header=True, mode='overwrite')
+ 
+print(f"Data has been written to the '{output_path}' directory")
+ 
