@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, when
+from pyspark.sql.functions import input_file_name, col, when, current_date
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -105,9 +105,12 @@ def main():
     
     # Process the new files
     processed_df = process_cdr_data(new_files_df)
+
+    # Add a date column to partition the output by date
+    processed_df = processed_df.withColumn("processing_date", current_date())
     
     # Write the processed data to HDFS in CSV format
-    processed_df.write.mode('overwrite').csv(output_path, header=True)
+    processed_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
     
     # Update the log with newly processed files
     new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
