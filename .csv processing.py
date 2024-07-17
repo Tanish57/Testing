@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, current_date, lit, when
+from pyspark.sql.functions import input_file_name, col, lit, when
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -48,13 +48,14 @@ def update_processed_files(log_path, files):
     updated_log.write.mode('overwrite').csv(log_path, header=True)
 
 # Function to process CSV files
-def process_csv_data(df):
-    # Extract the date from the 5th column of the first row
-    first_row = df.head(2)[0]
-    processing_date = first_row[4][:8]  # Extract date in 'YYYYMMDD' format
+def process_csv_data(file_path):
+    # Read the file, skipping the first three rows
+    raw_rdd = spark.sparkContext.textFile(file_path).zipWithIndex().filter(lambda x: x[1] >= 3).keys()
+    df = spark.read.csv(raw_rdd, header=True)
 
-    # Remove the first two rows
-    df = df.subtract(spark.createDataFrame([first_row, df.head(2)[1]]))
+    # Extract the processing date from the metadata row
+    first_row = spark.read.csv(file_path, header=False).head()
+    processing_date = first_row[4][:8]  # Extract date in 'YYYYMMDD' format
 
     # Select the required columns and replace blank values with 'NULL'
     for column in required_columns:
@@ -81,10 +82,15 @@ def main():
         return
     
     # Process the new files
-    processed_df = process_csv_data(new_files_df)
+    processed_dfs = []
+    for row in new_files_df.select("filename").distinct().collect():
+        file_path = row.filename
+        processed_dfs.append(process_csv_data(file_path))
+    
+    processed_df = spark.union(processed_dfs)
     
     # Write the processed data to HDFS in CSV format, partitioned by the extracted date
-    processed_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
+    processed_df.write.mode('overwrite').option("basePath", output_path).partitionBy("processing_date").csv(output_path, header=True)
     
     # Update the log with newly processed files
     new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
