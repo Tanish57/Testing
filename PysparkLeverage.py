@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, when, current_date, lit
+from pyspark.sql.functions import input_file_name, col, when, current_date, lit, substring
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -16,6 +16,7 @@ input_path = "hdfs://JBDLha/Apps/warehouse/invotp/med/*.cdr"
 output_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed/"
 processed_files_log_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed_files_log.csv"
 master_csv_path = "hdfs://JBDLha/Apps/warehouse/master/master.csv"
+network_node_master_path = "hdfs://JBDLha/Apps/warehouse/master/network_node_master.csv"
 
 # Schema for the processed files log
 log_schema = StructType([
@@ -76,13 +77,57 @@ def join_with_master(processed_df, master_df, join_columns):
     return enriched_df
 
 # Function to apply field mapping and logic for the final hive table
-def apply_field_mapping(df):
-    df = df.withColumn("FRANCHISE", when(col("incoming_node") == "X", "Franchise X")
-                       .when(col("outgoing_node") == "Y", "Franchise Y")
-                       .otherwise("Franchise Default")) \
-           .withColumn("BILLED_PRODUCT", when(col("incoming_product") == "A", "Product A")
-                       .otherwise("Product Default")) \
-           # Have to add more columns and logic based on mapping
+def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
+    df = df.withColumn("EVENT_DIRECTION", when(col("incoming_path") != "", "I")
+                                      .when(col("outgoing_path") != "", "O")
+                                      .otherwise("T")) \
+           .withColumn("INCOMING_POI", when(col("incoming_path") != "", col("trunk_group_master_df.POI"))
+                        .otherwise("NULL")) \
+           .withColumn("OUTGOING_POI", when(col("outgoing_path") != "", col("trunk_group_master_df.POI"))
+                        .otherwise("NULL")) \
+           .withColumn("INCOMING_OPERATOR", when(col("incoming_path") != "", col("trunk_group_master_df.OPERATOR"))
+                        .otherwise("NULL")) \
+           .withColumn("OUTGOING_OPERATOR", when(col("outgoing_path") != "", col("trunk_group_master_df.OPERATOR"))
+                        .otherwise("NULL")) \
+           .withColumn("FRANCHISE", when(col("incoming_node") != "NULL", col("network_node_master_df.FK_ORGA_FRAN"))
+                        .otherwise(col("network_node_master_df.FK_ORGA_FRAN"))) \
+           .withColumn("BILLED_PRODUCT", when(col("incoming_product") != "", col("incoming_product"))
+                        .otherwise(col("outgoing_product"))) \
+           .withColumn("CALL_COUNT", lit("1")) \
+           .withColumn("RATING_COMPONENT", lit("TC")) \
+           .withColumn("TIER", lit("INTRA")) \
+           .withColumn("CURRENCY", lit("INR")) \
+           .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
+                        .otherwise(lit("E"))) \
+           .withColumn("ACTUAL_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
+                        substring(col("event_duration"), 5, 2).cast("int") * 60 + 
+                        substring(col("event_duration"), 7, 2).cast("int")) \
+           .withColumn("CHARGED_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
+                        substring(col("event_duration"), 5, 2).cast("int") * 60 + 
+                        substring(col("event_duration"), 7, 2).cast("int")) \
+           .withColumn("CHARGED_UNITS", lit("0")) \
+           .withColumn("UNIT_COST_USED", lit("0")) \
+           .withColumn("AMOUNT", lit("0")) \
+           .withColumn("COMPONENT_DIRECTION", when(col("incoming_path") == "", lit("I"))
+                        .when(col("outgoing_path") == "", lit("O"))
+                        .otherwise(lit("T"))) \
+           .withColumn("FLAT_RATE_CHARGE", lit("0")) \
+           .withColumn("PRODUCT_GROUP", lit("TELE")) \
+           .withColumn("START_CALL_COUNT", lit("1")) \
+           .withColumn("service_type", lit("Access-Voice")) \
+           .withColumn("switch_id", when(col("incoming_node") != "", col("incoming_node"))
+                        .otherwise(col("outgoing_node"))) \
+           .withColumn("trunk_group_id", when(col("incoming_path") != "", col("incoming_path"))
+                        .otherwise(col("outgoing_path"))) \
+           .withColumn("poi_id", when(col("incoming_path") != "", col("trunk_group_master_df.POI"))
+                        .otherwise(col("trunk_group_master_df.POI"))) \
+           .withColumn("product_id", when(col("incoming_product") != "", col("incoming_product"))
+                        .otherwise(col("outgoing_product"))) \
+           .withColumn("network_operator_id", when(col("incoming_path") == "", col("trunk_group_master_df.OPERATOR"))
+                        .otherwise(col("trunk_group_master_df.OPERATOR"))) \
+           .withColumn("INPUTFILENAME", col("filename")) \
+           .withColumn("PROCESSEDTIME", current_date()) \
+           .withColumn("SOURCETYPE", lit("MED"))
     
     return df
 
@@ -91,8 +136,9 @@ def main():
     # Get list of already processed files
     processed_files = get_processed_files(processed_files_log_path)
     
-    # Read master CSV file
-    master_df = spark.read.csv(master_csv_path, header=True)
+    # Read master CSV files
+    trunk_group_master_df = spark.read.csv(master_csv_path, header=True).alias("trunk_group_master_df")
+    network_node_master_df = spark.read.csv(network_node_master_path, header=True).alias("network_node_master_df")
 
     # Read new files from HDFS
     raw_df = spark.read.text(input_path).withColumn("filename", input_file_name())
@@ -110,12 +156,16 @@ def main():
     # Add a date column to partition the output by date
     processed_df = processed_df.withColumn("processing_date", current_date())
 
-    # Join processed data with master CSV data
-    join_columns = ["incoming_node"]  # Adjust this to the actual columns used for joining
-    enriched_df = join_with_master(processed_df, master_df, join_columns)
+    # Join processed data with trunk group master data
+    join_columns_trunk_group = ["incoming_path", "incoming_node"]  # Adjust this to the actual columns used for joining
+    enriched_df_trunk = join_with_master(processed_df.alias("processed_table"), trunk_group_master_df, join_columns_trunk_group)
+    
+    # Join processed data with network node master data
+    join_columns_network_node = ["incoming_node"]  # Adjust this to the actual columns used for joining
+    enriched_df = join_with_master(enriched_df_trunk, network_node_master_df, join_columns_network_node)
 
     # Apply field mapping and logic
-    final_df = apply_field_mapping(enriched_df)
+    final_df = apply_field_mapping(enriched_df, trunk_group_master_df, network_node_master_df)
     
     # Write the enriched data to HDFS in CSV format, partitioned by date
     final_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
