@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, when, current_date
+from pyspark.sql.functions import input_file_name, col, when, current_date, lit
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -8,12 +8,14 @@ spark = SparkSession.builder \
     .appName("CDR Processing") \
     .master("local[*]") \
     .config("spark.driver.bindAddress", "127.0.0.1") \
+    .enableHiveSupport() \
     .getOrCreate()
 
 # HDFS input and output paths
 input_path = "hdfs://JBDLha/Apps/warehouse/invotp/med/*.cdr"
 output_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed/"
 processed_files_log_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed_files_log.csv"
+master_csv_path = "hdfs://JBDLha/Apps/warehouse/master/master.csv"
 
 # Schema for the processed files log
 log_schema = StructType([
@@ -39,35 +41,11 @@ def update_processed_files(log_path, files):
 
 # Function to process CDR files
 def process_cdr_data(df):
-    # Define the schema of the CDR file with 20 fields (adjust the schema according to your CDR file format)
-    schema = StructType([
-        StructField("incoming_node", StringType(), True),
-        StructField("outgoing_node", StringType(), True),
-        StructField("event_start_date", StringType(), True),
-        StructField("event_start_time", StringType(), True),
-        StructField("event_duration", StringType(), True),
-        StructField("anum", StringType(), True),
-        StructField("bnum", StringType(), True),
-        StructField("incoming_path", StringType(), True),
-        StructField("outgoing_path", StringType(), True),
-        StructField("incoming_product", StringType(), True),
-        StructField("outgoing_product", StringType(), True),
-        StructField("event_direction", StringType(), True),
-        StructField("discrete_rating_parameter_1", StringType(), True),
-        StructField("data_unit", StringType(), True),
-        StructField("record_sequence_number", StringType(), True),
-        StructField("record_type", StringType(), True),
-        StructField("user_summarisation", StringType(), True),
-        StructField("user_data", StringType(), True),
-        StructField("user_data_2", StringType(), True),
-        StructField("link_field", StringType(), True),
-        StructField("user_data_3", StringType(), True),
-    ])
-	# Convert fixed-length records to DataFrame with specified schema and handle NULL replacements
+    # Convert fixed-length records to DataFrame with specified schema and handle NULL replacements
     df = df.withColumn("incoming_node", when(col("value").substr(1, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(1, 20))) \
            .withColumn("outgoing_node", when(col("value").substr(21, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(21, 20))) \
            .withColumn("event_start_date", when(col("value").substr(41, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(41, 8))) \
-           .withColumn("evenet_start_time", when(col("value").substr(49, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(49, 8))) \
+           .withColumn("event_start_time", when(col("value").substr(49, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(49, 8))) \
            .withColumn("event_duration", when(col("value").substr(57, 10).eqNullSafe(''), 'NULL').otherwise(col("value").substr(57, 10))) \
            .withColumn("anum", when(col("value").substr(67, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(67, 28))) \
            .withColumn("bnum", when(col("value").substr(95, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(95, 28))) \
@@ -85,10 +63,27 @@ def process_cdr_data(df):
            .withColumn("user_data_2", when(col("value").substr(307, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(307, 30))) \
            .withColumn("link_field", when(col("value").substr(337, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(337, 2))) \
            .withColumn("user_data_3", when(col("value").substr(339, 80).eqNullSafe(''), 'NULL').otherwise(col("value").substr(339, 80)))
- 
+    
     # Drop the original value column
     df = df.drop("value")
- 
+    
+    return df
+
+# Function to join with master CSV
+def join_with_master(processed_df, master_df, join_columns):
+    # Join processed data with master data
+    enriched_df = processed_df.join(master_df, on=join_columns, how='left')
+    return enriched_df
+
+# Function to apply field mapping and logic for the final hive table
+def apply_field_mapping(df):
+    df = df.withColumn("FRANCHISE", when(col("incoming_node") == "X", "Franchise X")
+                       .when(col("outgoing_node") == "Y", "Franchise Y")
+                       .otherwise("Franchise Default")) \
+           .withColumn("BILLED_PRODUCT", when(col("incoming_product") == "A", "Product A")
+                       .otherwise("Product Default")) \
+           # Have to add more columns and logic based on mapping
+    
     return df
 
 # Main function to run the job
@@ -96,6 +91,9 @@ def main():
     # Get list of already processed files
     processed_files = get_processed_files(processed_files_log_path)
     
+    # Read master CSV file
+    master_df = spark.read.csv(master_csv_path, header=True)
+
     # Read new files from HDFS
     raw_df = spark.read.text(input_path).withColumn("filename", input_file_name())
     
@@ -108,13 +106,23 @@ def main():
     
     # Process the new files
     processed_df = process_cdr_data(new_files_df)
-
+    
     # Add a date column to partition the output by date
     processed_df = processed_df.withColumn("processing_date", current_date())
+
+    # Join processed data with master CSV data
+    join_columns = ["incoming_node"]  # Adjust this to the actual columns used for joining
+    enriched_df = join_with_master(processed_df, master_df, join_columns)
+
+    # Apply field mapping and logic
+    final_df = apply_field_mapping(enriched_df)
     
-    # Write the processed data to HDFS in CSV format
-    processed_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
+    # Write the enriched data to HDFS in CSV format, partitioned by date
+    final_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
     
+    # Write the enriched data to a Hive table
+    final_df.write.mode('overwrite').saveAsTable("enriched_cdr_data")
+
     # Update the log with newly processed files
     new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
     update_processed_files(processed_files_log_path, new_files)
