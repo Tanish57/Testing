@@ -64,3 +64,115 @@ network_operator_id
 INPUTFILENAME
 PROCESSEDTIME
 SOURCETYPE
+
+
+Sr.No	Filed Name	Field Mapping with Input & Logic
+1	INCOMING_NODE	direct mapping to "incoming_node"
+2	OUTGOING_NODE	direct mapping to "outgoing_node"
+3	EVENT_START_DATE	direct mapping to "event_start_date" [Format : YYYYMMDD]
+4	EVENT_START_TIME	substr(event_start_time,1,6) [Format : HHMISS]
+5	EVENT_DURATION	substr(event_duration,1,4)*3600+substr(event_duration,5,2)*60+substr(event_duration,7,2)
+6	ANUM	direct mapping to "anum"
+7	BNUM	direct mapping to "bnum"
+8	INCOMING_PATH	direct mapping to "incoming_path"
+9	OUTGOING_PATH	direct mapping to "outgoing_path"
+10	INCOMING_PRODUCT	direct mapping to "incoming_product"
+11	OUTGOING_PRODUCT	direct mapping to "outgoing_product"
+12	EVENT_DIRECTION	if (incoming_path!="")
+then
+EVENT_DIRECTION="I"
+else if (outgoing_path!="")
+EVENT_DIRECTION="O"
+else if (outgoing_path!="" && incoming_path!="")
+EVENT_DIRECTION="T"
+fi
+13	INCOMING_POI	Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI
+14	OUTGOING_POI	Lookup outgoing_path & outgoing_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI
+15	INCOMING_OPERATOR	Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+16	OUTGOING_OPERATOR	Lookup outgoing_path & outgoing_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+17	FRANCHISE	if (incoming_node !="")
+{
+Lookup incoming_node in "Network_Node_Master" basis ID and retrive FK_ORGA_FRAN
+}
+else
+{
+Lookup outgoing_node in "Network_Node_Master" basis ID and retrive FK_ORGA_FRAN
+}
+18	BILLING_OPERATOR	If ( incoming_path !="" )
+{
+Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+}
+else
+{
+Lookup outgoing_path & outgoing_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+}
+19	BILLED_PRODUCT	if (incoming_product!="")
+then
+billed_product=incoming_product
+else
+billed_product=outgoing_product
+fi
+20	CALL_COUNT	Hardcoded Value "1"
+21	RATING_COMPONENT	Hardcoded Value "TC"
+22	TIER	Hardcoded Value "INTRA"
+23	CURRENCY	Hardcoded Value "INR"
+24	CASH_FLOW	if (incoming_path!="")
+then
+CASH_FLOW="R"
+else
+CASH_FLOW="E"
+fi
+25	ACTUAL_USAGE	substr(event_duration,1,4)*3600+substr(event_duration,5,2)*60+substr(event_duration,7,2)
+26	CHARGED_USAGE	substr(event_duration,1,4)*3600+substr(event_duration,5,2)*60+substr(event_duration,7,2)
+27	CHARGED_UNITS	Hardcoded Value "0"
+28	UNIT_COST_USED	Hardcoded Value "0"
+29	AMOUNT	Hardcoded "0"
+30	COMPONENT_DIRECTION	if (incoming_path!="")
+then
+COMPONENT_DIRECTION="I"
+else if (outgoing_path!="")
+COMPONENT_DIRECTION="O"
+else if (outgoing_path!="" && incoming_path!="")
+COMPONENT_DIRECTION="T"
+fi
+31	FLAT_RATE_CHARGE	Hardcoded Value "0"
+32	PRODUCT_GROUP	Hardcoded Value "TELE"
+33	START_CALL_COUNT	Hardcoded Value "1"
+34	service_type	Hardcoded Value "Access-Voice"
+35	switch_id	if (incoming_node!="")
+then
+switchid=incoming_node
+else
+switchid=outgoing_node
+fi
+36	trunk_group_id	if (incoming_path!="")
+then
+trunk_group_id=incoming_path
+else
+trunk_group_id=outgoing_path
+fi
+37	poi_id	If ( incoming_path != "" )
+{
+Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI
+}
+else
+{
+Lookup outgoing_path & outgoing_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI
+}
+38	product_id	if (incoming_product!="")
+then
+product_id=incoming_product
+else
+product_id=outgoing_product
+fi
+39	network_operator_id	If (incoming_path!="")
+{
+Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+}
+else
+{
+Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR
+}
+40	INPUTFILENAME	Processed-File-Name
+41	PROCESSEDTIME	Processed Date Time
+42	SOURCETYPE	Hardcoded Value "MED"
