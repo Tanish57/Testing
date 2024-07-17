@@ -6,10 +6,12 @@ import os
 # Initialize Spark session
 spark = SparkSession.builder \
     .appName("CDR Processing") \
+    .master("local[*]") \
+    .config("spark.driver.bindAddress", "127.0.0.1") \
     .getOrCreate()
 
 # HDFS input and output paths
-input_path = "hdfs://JBDLha/Apps/warehouse/invotp/med/"
+input_path = "hdfs://JBDLha/Apps/warehouse/invotp/med/*.cdr"
 output_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed/"
 processed_files_log_path = "hdfs://JBDLha/Apps/warehouse/invotp/processed_files_log.csv"
 
@@ -39,53 +41,54 @@ def update_processed_files(log_path, files):
 def process_cdr_data(df):
     # Define the schema of the CDR file with 20 fields (adjust the schema according to your CDR file format)
     schema = StructType([
-        StructField("Field1", StringType(), True),
-        StructField("Field2", StringType(), True),
-        StructField("Field3", StringType(), True),
-        StructField("Field4", StringType(), True),
-        StructField("Field5", StringType(), True),
-        StructField("Field6", StringType(), True),
-        StructField("Field7", StringType(), True),
-        StructField("Field8", StringType(), True),
-        StructField("Field9", StringType(), True),
-        StructField("Field10", StringType(), True),
-        StructField("Field11", StringType(), True),
-        StructField("Field12", StringType(), True),
-        StructField("Field13", StringType(), True),
-        StructField("Field14", StringType(), True),
-        StructField("Field15", StringType(), True),
-        StructField("Field16", StringType(), True),
-        StructField("Field17", StringType(), True),
-        StructField("Field18", StringType(), True),
-        StructField("Field19", StringType(), True),
-        StructField("Field20", StringType(), True)
+        StructField("incoming_node", StringType(), True),
+        StructField("outgoing_node", StringType(), True),
+        StructField("event_start_date", StringType(), True),
+        StructField("event_start_time", StringType(), True),
+        StructField("event_duration", StringType(), True),
+        StructField("anum", StringType(), True),
+        StructField("bnum", StringType(), True),
+        StructField("incoming_path", StringType(), True),
+        StructField("outgoing_path", StringType(), True),
+        StructField("incoming_product", StringType(), True),
+        StructField("outgoing_product", StringType(), True),
+        StructField("event_direction", StringType(), True),
+        StructField("discrete_rating_parameter_1", StringType(), True),
+        StructField("data_unit", StringType(), True),
+        StructField("record_sequence_number", StringType(), True),
+        StructField("record_type", StringType(), True),
+        StructField("user_summarisation", StringType(), True),
+        StructField("user_data", StringType(), True),
+        StructField("user_data_2", StringType(), True),
+        StructField("link_field", StringType(), True),
+        StructField("user_data_3", StringType(), True),
     ])
-    
-    # Convert fixed-length records to DataFrame with specified schema and handle NULL replacements
-    df = df.withColumn("Field1", when(col("value").substr(1, 21).eqNullSafe(''), 'NULL').otherwise(col("value").substr(1, 21))) \
-           .withColumn("Field2", when(col("value").substr(22, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(22, 20))) \
-           .withColumn("Field3", when(col("value").substr(42, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(42, 8))) \
-           .withColumn("Field4", when(col("value").substr(50, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(50, 8))) \
-           .withColumn("Field5", when(col("value").substr(58, 10).eqNullSafe(''), 'NULL').otherwise(col("value").substr(58, 10))) \
-           .withColumn("Field6", when(col("value").substr(68, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(68, 28))) \
-           .withColumn("Field7", when(col("value").substr(96, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(96, 28))) \
-           .withColumn("Field8", when(col("value").substr(124, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(124, 20))) \
-           .withColumn("Field9", when(col("value").substr(144, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(144, 20))) \
-           .withColumn("Field10", when(col("value").substr(164, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(164, 14))) \
-           .withColumn("Field11", when(col("value").substr(178, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(178, 14))) \
-           .withColumn("Field12", when(col("value").substr(192, 1).eqNullSafe(''), 'NULL').otherwise(col("value").substr(192, 1))) \
-           .withColumn("Field13", when(col("value").substr(193, 15).eqNullSafe(''), 'NULL').otherwise(col("value").substr(193, 15))) \
-           .withColumn("Field14", when(col("value").substr(208, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(208, 8))) \
-           .withColumn("Field15", when(col("value").substr(216, 40).eqNullSafe(''), 'NULL').otherwise(col("value").substr(216, 40))) \
-           .withColumn("Field16", when(col("value").substr(256, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(256, 2))) \
-           .withColumn("Field17", when(col("value").substr(258, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(258, 20))) \
-           .withColumn("Field18", when(col("value").substr(278, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(278, 30))) \
-           .withColumn("Field19", when(col("value").substr(308, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(308, 30))) \
-           .withColumn("Field20", when(col("value").substr(338, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(338, 2)))
-    
+	# Convert fixed-length records to DataFrame with specified schema and handle NULL replacements
+    df = df.withColumn("incoming_node", when(col("value").substr(1, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(1, 20))) \
+           .withColumn("outgoing_node", when(col("value").substr(21, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(21, 20))) \
+           .withColumn("event_start_date", when(col("value").substr(41, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(41, 8))) \
+           .withColumn("evenet_start_time", when(col("value").substr(49, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(49, 8))) \
+           .withColumn("event_duration", when(col("value").substr(57, 10).eqNullSafe(''), 'NULL').otherwise(col("value").substr(57, 10))) \
+           .withColumn("anum", when(col("value").substr(67, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(67, 28))) \
+           .withColumn("bnum", when(col("value").substr(95, 28).eqNullSafe(''), 'NULL').otherwise(col("value").substr(95, 28))) \
+           .withColumn("incoming_path", when(col("value").substr(123, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(123, 20))) \
+           .withColumn("outgoing_path", when(col("value").substr(143, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(143, 20))) \
+           .withColumn("incoming_product", when(col("value").substr(163, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(163, 14))) \
+           .withColumn("outgoing_product", when(col("value").substr(177, 14).eqNullSafe(''), 'NULL').otherwise(col("value").substr(177, 14))) \
+           .withColumn("event_direction", when(col("value").substr(191, 1).eqNullSafe(''), 'NULL').otherwise(col("value").substr(191, 1))) \
+           .withColumn("discrete_rating_parameter_1", when(col("value").substr(192, 15).eqNullSafe(''), 'NULL').otherwise(col("value").substr(192, 15))) \
+           .withColumn("data_unit", when(col("value").substr(207, 8).eqNullSafe(''), 'NULL').otherwise(col("value").substr(207, 8))) \
+           .withColumn("record_sequence_number", when(col("value").substr(215, 40).eqNullSafe(''), 'NULL').otherwise(col("value").substr(215, 40))) \
+           .withColumn("record_type", when(col("value").substr(255, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(255, 2))) \
+           .withColumn("user_summarisation", when(col("value").substr(257, 20).eqNullSafe(''), 'NULL').otherwise(col("value").substr(257, 20))) \
+           .withColumn("user_data", when(col("value").substr(277, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(277, 30))) \
+           .withColumn("user_data_2", when(col("value").substr(307, 30).eqNullSafe(''), 'NULL').otherwise(col("value").substr(307, 30))) \
+           .withColumn("link_field", when(col("value").substr(337, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(337, 2))) \
+           .withColumn("user_data_3", when(col("value").substr(339, 80).eqNullSafe(''), 'NULL').otherwise(col("value").substr(339, 80)))
+ 
     # Drop the original value column
     df = df.drop("value")
-    
+ 
     return df
 
 # Main function to run the job
