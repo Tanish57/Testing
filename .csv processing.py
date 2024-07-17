@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, current_date
+from pyspark.sql.functions import input_file_name, col, current_date, lit, when
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
@@ -49,7 +49,20 @@ def update_processed_files(log_path, files):
 
 # Function to process CSV files
 def process_csv_data(df):
+    # Extract the date from the 5th column of the first row
+    first_row = df.head(2)[0]
+    processing_date = first_row[4][:8]  # Extract date in 'YYYYMMDD' format
+
+    # Remove the first two rows
+    df = df.subtract(spark.createDataFrame([first_row, df.head(2)[1]]))
+
+    # Select the required columns and replace blank values with 'NULL'
+    for column in required_columns:
+        df = df.withColumn(column, when(col(column) == '', 'NULL').otherwise(col(column)))
+
     df = df.select(*required_columns)
+    df = df.withColumn("processing_date", lit(processing_date))
+
     return df
 
 # Main function to run the job
@@ -70,10 +83,7 @@ def main():
     # Process the new files
     processed_df = process_csv_data(new_files_df)
     
-    # Add a date column to partition the output by date
-    processed_df = processed_df.withColumn("processing_date", current_date())
-    
-    # Write the processed data to HDFS in CSV format, partitioned by date
+    # Write the processed data to HDFS in CSV format, partitioned by the extracted date
     processed_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
     
     # Update the log with newly processed files
