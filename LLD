@@ -176,3 +176,48 @@ Lookup incoming_path & incoming_node in "Trunk_Group_Master" basis ID and FK_NNO
 40	INPUTFILENAME	Processed-File-Name
 41	PROCESSEDTIME	Processed Date Time
 42	SOURCETYPE	Hardcoded Value "MED"
+
+
+Sr.No	Filed Name	Field Mapping with Input & Logic
+1	INCOMING_NODE	direct mapping to "INCOMING_NODE"
+2	OUTGOING_NODE	direct mapping to "OUTGOING_node"
+3	EVENT_START_DATE	direct mapping to "EVENT_START_DATE"
+4	EVENT_START_TIME	substr(EVENT_START_TIME,1,6) [Format : HHMISS]
+5	EVENT_DURATION	direct mapping to "EVENT_DURATION"
+6	ANUM	direct mapping to "ANUM"
+7	BNUM	direct mapping to "BNUM"
+8	INCOMING_PATH	direct mapping to "INCOMING_PATH"
+9	OUTGOING_PATH	direct mapping to "OUTGOING_PATH"
+10	INCOMING_PRODUCT	direct mapping to "INCOMING_PRODUCT"
+11	OUTGOING_PRODUCT	direct mapping to "OUTGOING_PRODUCT"
+12	EVENT_DIRECTION	direct mapping to "EVENT_DIRECTION"
+13	INCOMING_POI	direct mapping to "INCOMING_POI"
+14	OUTGOING_POI	direct mapping to "OUTGOING_POI"
+15	INCOMING_OPERATOR	direct mapping to "INCOMING_OPERATOR"
+16	OUTGOING_OPERATOR	direct mapping to "OUTGOING_OPERATOR"
+17	FRANCHISE	direct mapping to "FRANCHISE"
+18	BILLING_OPERATOR	direct mapping to "BILLING_OPERATOR"
+19	BILLED_PRODUCT	direct mapping to "BILLED_PRODUCT"
+20	CALL_COUNT	direct mapping to "CALL_COUNT"
+21	RATING_COMPONENT	direct mapping to "RATING_COMPONENT"
+22	TIER	direct mapping to "TIER"
+23	CURRENCY	direct mapping to "CURRENCY"
+24	CASH_FLOW	direct mapping to "CASH_FLOW"
+25	ACTUAL_USAGE	direct mapping to "ACTUAL_USAGE"
+26	CHARGED_USAGE	direct mapping to "CHARGED_USAGE"
+27	CHARGED_UNITS	direct mapping to "CHARGED_UNITS"
+28	UNIT_COST_USED	direct mapping to "UNIT_COST_USED"
+29	AMOUNT	direct mapping to "AMOUNT"
+30	COMPONENT_DIRECTION	direct mapping to "COMPONENT_DIRECTION"
+31	FLAT_RATE_CHARGE	direct mapping to "FLAT_RATE_CHARGE"
+32	PRODUCT_GROUP	direct mapping to "PRODUCT_GROUP"
+33	START_CALL_COUNT	direct mapping to "START_CALL_COUNT"
+34	service_type	Hardcoded Value "Access-Voice"
+35	switch_id	if ( INCOMING_NODE !="" ) then switchid=INCOMING_NODE else switchid=OUTGOING_node
+36	trunk_group_id	if (INCOMING_PATH!="") then trunk_group_id=INCOMING_PATH else trunk_group_id=OUTGOING_PATH
+37	poi_id	If ( INCOMING_PATH != "" ) { Lookup INCOMING_PATH & INCOMING_NODE in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI } else { Lookup OUTGOING_PATH & OUTGOING_node in "Trunk_Group_Master" basis ID and FK_NNOD and retrive POI }
+38	product_id	if (INCOMING_PRODUCT!="") then product_id=INCOMING_PRODUCT else product_id=OUTGOING_PRODUCT
+39	network_operator_id	If (INCOMING_PATH!="") { Lookup INCOMING_PATH & INCOMING_NODE in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR } else { Lookup INCOMING_PATH & INCOMING_NODE in "Trunk_Group_Master" basis ID and FK_NNOD and retrive OPERATOR }
+40	INPUTFILENAME	Processed-File-Name
+41	PROCESSEDTIME	Processed Date Time
+42	SOURCETYPE	Hardcoded Value "ICT"
