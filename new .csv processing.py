@@ -12,8 +12,9 @@ spark = SparkSession.builder \
 # HDFS input and output paths
 input_path = "hdfs://path/to/input/"  # Replace with your HDFS input path
 output_path = "hdfs://path/to/output/"  # Replace with your HDFS output path
+hold_path = "hdfs://path/to/hold/"  # Replace with your HDFS hold path for unmatched records
 processed_files_log_path = "hdfs://path/to/processed_files_log.csv"  # Replace with your HDFS log path
-trunk_group_master_path = "hdfs://path/to/Trunk_Group_Master.csv"  # Replace with your HDFS trunk group master path
+trunk_group_master_base_path = "hdfs://path/to/trunk_group_master/"  # Replace with your HDFS trunk group master base path
 
 # Schema for the processed files log
 log_schema = StructType([
@@ -51,13 +52,9 @@ def update_processed_files(log_path, files):
 
 # Function to process CSV files
 def process_csv_data(file_path, trunk_group_master):
-    # Read the file, skipping the first three rows
-    raw_rdd = spark.sparkContext.textFile(file_path).zipWithIndex().filter(lambda x: x[1] >= 3).keys()
+    # Read the file, skipping the first and last two rows (metadata)
+    raw_rdd = spark.sparkContext.textFile(file_path).zipWithIndex().filter(lambda x: x[1] >= 1 and x[1] < raw_rdd.count() - 2).keys()
     df = spark.read.csv(raw_rdd, header=True)
-
-    # Extract the processing date from the metadata row
-    first_row = spark.read.csv(file_path, header=False).head()
-    processing_date = first_row[4][:8]  # Extract date in 'YYYYMMDD' format
 
     # Select the required columns and replace blank values with 'NULL'
     for column in required_columns:
@@ -68,6 +65,16 @@ def process_csv_data(file_path, trunk_group_master):
     df = df.withColumn("service_type", lit("Access-Voice"))
     df = df.withColumn("switch_id", when(col("INCOMING_NODE") != "", col("INCOMING_NODE")).otherwise(col("OUTGOING_NODE")))
     df = df.withColumn("trunk_group_id", when(col("INCOMING_PATH") != "", col("INCOMING_PATH")).otherwise(col("OUTGOING_PATH")))
+
+    # Handle incoming_node and outgoing_node separately
+    incoming_df = df.filter(col("INCOMING_NODE") != "NULL")
+    outgoing_df = df.filter(col("OUTGOING_NODE") != "NULL")
+    outgoing_df = outgoing_df.withColumnRenamed("OUTGOING_NODE", "INCOMING_NODE") \
+                             .withColumnRenamed("OUTGOING_PATH", "INCOMING_PATH") \
+                             .withColumnRenamed("OUTGOING_PRODUCT", "INCOMING_PRODUCT")
+
+    df = incoming_df.union(outgoing_df)
+
     df = df.withColumn("poi_id", when(col("INCOMING_PATH") != "", col("INCOMING_PATH")).otherwise(col("OUTGOING_PATH"))) \
            .join(trunk_group_master, (col("INCOMING_PATH") == trunk_group_master["ID"]) & (col("INCOMING_NODE") == trunk_group_master["FK_NNOD"]), "left") \
            .select("POI")
@@ -81,7 +88,14 @@ def process_csv_data(file_path, trunk_group_master):
 
     df = df.withColumn("processing_date", lit(processing_date))
 
-    return df
+    # Deduplicate based on key columns (e.g., ANUM, BNUM, EVENT_START_DATE, EVENT_START_TIME)
+    deduped_df = df.dropDuplicates(["ANUM", "BNUM", "EVENT_START_DATE", "EVENT_START_TIME"])
+
+    # Split matched and unmatched records
+    matched_df = deduped_df.filter(col("POI").isNotNull() & col("OPERATOR").isNotNull())
+    unmatched_df = deduped_df.filter(col("POI").isNull() | col("OPERATOR").isNull())
+
+    return matched_df, unmatched_df
 
 # Main function to run the job
 def main():
@@ -89,6 +103,8 @@ def main():
     processed_files = get_processed_files(processed_files_log_path)
 
     # Read the trunk group master file
+    latest_master_folder = sorted(os.listdir(trunk_group_master_base_path))[-1]
+    trunk_group_master_path = os.path.join(trunk_group_master_base_path, latest_master_folder, "Trunk_Group_Master.csv")
     trunk_group_master = spark.read.csv(trunk_group_master_path, header=True)
 
     # Read new files from HDFS
@@ -104,18 +120,22 @@ def main():
     # Process the new files
     for row in new_files_df.select("filename").distinct().collect():
         file_path = row.filename
-        processed_df = process_csv_data(file_path, trunk_group_master)
+        matched_df, unmatched_df = process_csv_data(file_path, trunk_group_master)
 
-        # Write the processed data to Hive table, partitioned by the extracted date
+        # Write the matched data to Hive table, partitioned by the extracted date
         spark.sql("CREATE TABLE IF NOT EXISTS processed_data_table (" +
                   ", ".join([f"{col} STRING" for col in required_columns]) +
                   ") PARTITIONED BY (processing_date STRING) STORED AS TEXTFILE")
 
-        processed_df.write.mode('append').partitionBy("processing_date").saveAsTable("processed_data_table")
+        matched_df.write.mode('append').partitionBy("processing_date").saveAsTable("processed_data_table")
 
-        # Write the processed data to HDFS in CSV format, partitioned by the extracted date
+        # Write the matched data to HDFS in CSV format, partitioned by the extracted date
         output_file_path = os.path.join(output_path, f"{os.path.basename(file_path)}")
-        processed_df.write.mode('overwrite').partitionBy("processing_date").csv(output_file_path, header=True)
+        matched_df.write.mode('overwrite').partitionBy("processing_date").csv(output_file_path, header=True)
+
+        # Write the unmatched data to hold folder
+        hold_file_path = os.path.join(hold_path, f"{os.path.basename(file_path)}")
+        unmatched_df.write.mode('overwrite').csv(hold_file_path, header=True)
 
         # Update the log with newly processed file
         update_processed_files(processed_files_log_path, [file_path])
