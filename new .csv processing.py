@@ -3,9 +3,17 @@ from pyspark.sql.functions import input_file_name, col, lit, when, substring, cu
 from pyspark.sql.types import StructType, StructField, StringType
 import os
 
-# Initialize Spark session with Hive support
+# Kerberos principal and keytab file
+principal = "your_principal@YOUR.REALM.COM"
+keytab = "/path/to/your.keytab"
+
+# Initialize Spark session with Kerberos authentication
 spark = SparkSession.builder \
-    .appName("CSV Processing") \
+    .appName("CSV Processing with Kerberos") \
+    .config("spark.yarn.principal", principal) \
+    .config("spark.yarn.keytab", keytab) \
+    .config("spark.hadoop.security.authentication", "kerberos") \
+    .config("spark.hadoop.security.authorization", "true") \
     .enableHiveSupport() \
     .getOrCreate()
 
