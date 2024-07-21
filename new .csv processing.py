@@ -4,8 +4,8 @@ from pyspark.sql.types import StructType, StructField, StringType
 import os
 
 # Kerberos principal and keytab file
-principal = "your_principal@YOUR.REALM.COM"
-keytab = "/path/to/your.keytab"
+principal = "SI_devops@JBDLPRD.COM"
+keytab = "/app/app_keytabs/SI_devops.keytab"
 
 # Initialize Spark session with Kerberos authentication
 spark = SparkSession.builder \
