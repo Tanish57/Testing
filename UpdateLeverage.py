@@ -112,7 +112,6 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
            .withColumn("RATING_COMPONENT", lit("TC")) \
            .withColumn("TIER", lit("INTRA")) \
            .withColumn("CURRENCY", lit("INR")) \
-           .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("
            .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
                         .otherwise(lit("E"))) \
            .withColumn("ACTUAL_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
