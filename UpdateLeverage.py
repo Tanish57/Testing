@@ -2,7 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import input_file_name, col, when, current_date, lit, substring, to_date, regexp_extract
 from pyspark.sql.types import StructType, StructField, StringType
 import os
-import shutil
+import re
 
 # Initialize Spark session
 spark = SparkSession.builder \
@@ -112,7 +112,7 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
            .withColumn("RATING_COMPONENT", lit("TC")) \
            .withColumn("TIER", lit("INTRA")) \
            .withColumn("CURRENCY", lit("INR")) \
-           .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
+                      .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
                         .otherwise(lit("E"))) \
            .withColumn("ACTUAL_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
                         substring(col("event_duration"), 5, 2).cast("int") * 60 + 
@@ -182,8 +182,17 @@ def process_hold_files(hold_folder_path, trunk_group_master_df, network_node_mas
 # Main function to run the job
 def main():
     processed_files = get_processed_files(processed_files_log_path)
-    trunk_group_latest_path = max([os.path.join(trunk_group_base_path, d) for d in os.listdir(trunk_group_base_path)], key=os.path.getmtime)
-    network_node_latest_path = max([os.path.join(network_node_base_path, d) for d in os.listdir(network_node_base_path)], key=os.path.getmtime)
+
+    # Find the latest trunk group and network node files based on their filenames
+    trunk_group_files = os.listdir(trunk_group_base_path)
+    network_node_files = os.listdir(network_node_base_path)
+    
+    trunk_group_latest_file = max(trunk_group_files, key=lambda x: re.search(r'\d{8}', x).group())
+    network_node_latest_file = max(network_node_files, key=lambda x: re.search(r'\d{8}', x).group())
+
+    trunk_group_latest_path = os.path.join(trunk_group_base_path, trunk_group_latest_file)
+    network_node_latest_path = os.path.join(network_node_base_path, network_node_latest_file)
+    
     trunk_group_master_df = spark.read.csv(trunk_group_latest_path, header=True, sep='|').alias("trunk_group_master_df")
     network_node_master_df = spark.read.csv(network_node_latest_path, header=True, sep='|').alias("network_node_master_df")
 
