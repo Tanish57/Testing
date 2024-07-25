@@ -105,8 +105,6 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
            .withColumn("OUTGOING_OPERATOR", when(col("outgoing_path") != "", col("trunk_group_master_df.OPERATOR"))
                         .otherwise("NULL")) \
            .withColumn("FRANCHISE", when(col("incoming_node") != "NULL", col("network_node_master_df.FK_ORGA_FRAN"))
-                        .otherwise
-           .withColumn("FRANCHISE", when(col("incoming_node") != "NULL", col("network_node_master_df.FK_ORGA_FRAN"))
                         .otherwise(col("network_node_master_df.FK_ORGA_FRAN"))) \
            .withColumn("BILLED_PRODUCT", when(col("incoming_product") != "", col("incoming_product"))
                         .otherwise(col("outgoing_product"))) \
@@ -114,6 +112,7 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
            .withColumn("RATING_COMPONENT", lit("TC")) \
            .withColumn("TIER", lit("INTRA")) \
            .withColumn("CURRENCY", lit("INR")) \
+           .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("
            .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
                         .otherwise(lit("E"))) \
            .withColumn("ACTUAL_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
