@@ -1,7 +1,8 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name, col, when, current_date, lit, substring
+from pyspark.sql.functions import input_file_name, col, when, current_date, lit, substring, to_date, regexp_extract
 from pyspark.sql.types import StructType, StructField, StringType
 import os
+import shutil
 
 # Initialize Spark session
 spark = SparkSession.builder \
@@ -10,16 +11,18 @@ spark = SparkSession.builder \
     .enableHiveSupport() \
     .getOrCreate()
 
-# HDFS input and output paths
-input_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/med/2024070316*.cdr"
-output_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/output"
+# HDFS paths
+input_base_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/med/"
+output_base_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/output/"
 processed_files_log_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/processed_files_log.csv"
-master_csv_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/trunk/*.csv"
-network_node_master_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/network/*.csv"
+trunk_group_base_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/trunk/"
+network_node_base_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/network/"
+hold_folder_path = "hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/hold/"
 
 # Schema for the processed files log
 log_schema = StructType([
-    StructField("filename", StringType(), True)
+    StructField("filename", StringType(), True),
+    StructField("original_date", StringType(), True)
 ])
 
 # Function to read the log of processed files
@@ -30,8 +33,8 @@ def get_processed_files(log_path):
     return set(df.select("filename").rdd.flatMap(lambda x: x).collect())
 
 # Function to update the log of processed files
-def update_processed_files(log_path, files):
-    new_log = spark.createDataFrame([(file,) for file in files], ["filename"])
+def update_processed_files(log_path, files, original_date):
+    new_log = spark.createDataFrame([(file, original_date) for file in files], ["filename", "original_date"])
     if os.path.exists(log_path):
         existing_log = spark.read.csv(log_path, schema=log_schema, header=True)
         updated_log = existing_log.union(new_log).distinct()
@@ -64,6 +67,19 @@ def process_cdr_data(df):
            .withColumn("link_field", when(col("value").substr(337, 2).eqNullSafe(''), 'NULL').otherwise(col("value").substr(337, 2))) \
            .withColumn("user_data_3", when(col("value").substr(339, 80).eqNullSafe(''), 'NULL').otherwise(col("value").substr(339, 80)))
     
+    # Convert event_start_date to date format
+    df = df.withColumn("event_start_date", to_date(col("event_start_date"), "yyyyMMdd"))
+    
+    # Extract original processing date from the filename
+    df = df.withColumn("original_date", regexp_extract(col("filename"), r'\d{8}', 0))
+    
+    # Split the records where both incoming_node and outgoing_node are not NULL into two records
+    df_incoming = df.withColumn("outgoing_node", lit(None))
+    df_outgoing = df.withColumn("incoming_node", lit(None))
+    
+    # Union the two dataframes to get separate records
+    df = df_incoming.union(df_outgoing)
+    
     # Drop the original value column
     df = df.drop("value")
     
@@ -88,6 +104,8 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
                         .otherwise("NULL")) \
            .withColumn("OUTGOING_OPERATOR", when(col("outgoing_path") != "", col("trunk_group_master_df.OPERATOR"))
                         .otherwise("NULL")) \
+           .withColumn("FRANCHISE", when(col("incoming_node") != "NULL", col("network_node_master_df.FK_ORGA_FRAN"))
+                        .otherwise
            .withColumn("FRANCHISE", when(col("incoming_node") != "NULL", col("network_node_master_df.FK_ORGA_FRAN"))
                         .otherwise(col("network_node_master_df.FK_ORGA_FRAN"))) \
            .withColumn("BILLED_PRODUCT", when(col("incoming_product") != "", col("incoming_product"))
@@ -130,60 +148,74 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
     
     return df
 
+# Function to move unmatched records to hold folder
+def move_to_hold_folder(df, hold_folder_path, filename_col='filename'):
+    hold_files = df.select(filename_col).distinct().collect()
+    for row in hold_files:
+        file_to_move = row[filename_col]
+        # Assuming HDFS command to move file to hold folder
+        os.system(f'hdfs dfs -mv {file_to_move} {hold_folder_path}')
+
+# Function to process files from hold folder
+def process_hold_files(hold_folder_path, trunk_group_master_df, network_node_master_df, processed_files):
+    hold_files = [os.path.join(hold_folder_path, f) for f in os.listdir(hold_folder_path)]
+    if hold_files:
+        raw_df = spark.read.text(hold_files).withColumn("filename", input_file_name())
+        new_files_df = raw_df.filter(~col("filename").isin(processed_files))
+        if new_files_df.count() > 0:
+            processed_df = process_cdr_data(new_files_df)
+            processed_df = processed_df.withColumn("processing_date", current_date())
+            join_columns_trunk_group = ["incoming_path", "ID"]
+            enriched_df_trunk = join_with_master(processed_df.alias("processed_table"), trunk_group_master_df, join_columns_trunk_group)
+            join_columns_network_node = ["incoming_node", "ID"]
+            enriched_df = join_with_master(enriched_df_trunk, network_node_master_df, join_columns_network_node)
+            matched_df = enriched_df.filter(col("trunk_group_master_df.ID").isNotNull() & col("network_node_master_df.ID").isNotNull())
+            unmatched_df = enriched_df.filter(col("trunk_group_master_df.ID").isNull() | col("network_node_master_df.ID").isNull())
+            if unmatched_df.count() > 0:
+                move_to_hold_folder(unmatched_df, hold_folder_path)
+            final_df = apply_field_mapping(matched_df, trunk_group_master_df, network_node_master_df)
+            for row in matched_df.select("original_date").distinct().collect():
+                original_date = row["original_date"]
+                output_path = os.path.join(output_base_path, original_date)
+                final_df.filter(col("original_date") == original_date).write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
+            new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
+            update_processed_files(processed_files_log_path, new_files, original_date)
+
 # Main function to run the job
 def main():
-    # Get list of already processed files
     processed_files = get_processed_files(processed_files_log_path)
-    
-    # Read master CSV files
-    trunk_group_master_df = spark.read.csv(master_csv_path, header=True).alias("trunk_group_master_df")
-    network_node_master_df = spark.read.csv(network_node_master_path, header=True).alias("network_node_master_df")
+    trunk_group_latest_path = max([os.path.join(trunk_group_base_path, d) for d in os.listdir(trunk_group_base_path)], key=os.path.getmtime)
+    network_node_latest_path = max([os.path.join(network_node_base_path, d) for d in os.listdir(network_node_base_path)], key=os.path.getmtime)
+    trunk_group_master_df = spark.read.csv(trunk_group_latest_path, header=True, sep='|').alias("trunk_group_master_df")
+    network_node_master_df = spark.read.csv(network_node_latest_path, header=True, sep='|').alias("network_node_master_df")
 
-    # Read new files from HDFS
-    raw_df = spark.read.text(input_path).withColumn("filename", input_file_name())
-    
-    # Filter out already processed files
-    new_files_df = raw_df.filter(~col("filename").isin(processed_files))
-    
-    if new_files_df.count() == 0:
-        print("No new files to process")
-        return
-    
-    # Process the new files
-    processed_df = process_cdr_data(new_files_df)
-    
-    # Add a date column to partition the output by date
-    processed_df = processed_df.withColumn("processing_date", current_date())
+    # Process each hourly directory of input files
+    for hour_dir in sorted([os.path.join(input_base_path, d) for d in os.listdir(input_base_path)]):
+        raw_df = spark.read.text(hour_dir + "/*.cdr").withColumn("filename", input_file_name())
+        new_files_df = raw_df.filter(~col("filename").isin(processed_files))
+        if new_files_df.count() == 0:
+            print(f"No new files to process in {hour_dir}")
+            continue
+        processed_df = process_cdr_data(new_files_df)
+        processed_df = processed_df.withColumn("processing_date", current_date())
+        join_columns_trunk_group = ["incoming_path", "ID"]
+        enriched_df_trunk = join_with_master(processed_df.alias("processed_table"), trunk_group_master_df, join_columns_trunk_group)
+        join_columns_network_node = ["incoming_node", "ID"]
+        enriched_df = join_with_master(enriched_df_trunk, network_node_master_df, join_columns_network_node)
+        matched_df = enriched_df.filter(col("trunk_group_master_df.ID").isNotNull() & col("network_node_master_df.ID").isNotNull())
+        unmatched_df = enriched_df.filter(col("trunk_group_master_df.ID").isNull() | col("network_node_master_df.ID").isNull())
+        if unmatched_df.count() > 0:
+            move_to_hold_folder(unmatched_df, hold_folder_path)
+        final_df = apply_field_mapping(matched_df, trunk_group_master_df, network_node_master_df)
+        for row in matched_df.select("original_date").distinct().collect():
+            original_date = row["original_date"]
+            output_path = os.path.join(output_base_path, original_date)
+            final_df.filter(col("original_date") == original_date).write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
+        new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
+        update_processed_files(processed_files_log_path, new_files, original_date)
 
-    # Join based on name and employee_name columns
-    #joined_df = processed_df.join(df2, df1.name == df2.employee_name, 'inner')
- 
-    # Select columns from the joined DataFrame
-    #result_df = joined_df.select(df1.id, df1.name, df1.age, df2.employee_id, df2.employee_name, df2.salary)
- 
-    # Show the result
-    #result_df.show()
-    
-    # Join processed data with trunk group master data
-    join_columns_trunk_group = ["incoming_path", "ID"]  # Adjust this to the actual columns used for joining
-    enriched_df_trunk = join_with_master(processed_df.alias("processed_table"), trunk_group_master_df, join_columns_trunk_group)
-    
-    # Join processed data with network node master data
-    join_columns_network_node = ["incoming_node", "ID"]  # Adjust this to the actual columns used for joining
-    enriched_df = join_with_master(enriched_df_trunk, network_node_master_df, join_columns_network_node)
-
-    # Apply field mapping and logic
-    final_df = apply_field_mapping(enriched_df, trunk_group_master_df, network_node_master_df)
-    
-    # Write the enriched data to HDFS in CSV format, partitioned by date
-    final_df.write.mode('overwrite').partitionBy("processing_date").csv(output_path, header=True)
-    
-    # Write the enriched data to a Hive table
-    final_df.write.mode('overwrite').saveAsTable("enriched_cdr_data")
-
-    # Update the log with newly processed files
-    new_files = new_files_df.select("filename").distinct().rdd.flatMap(lambda x: x).collect()
-    update_processed_files(processed_files_log_path, new_files)
+    # Process hold folder
+    process_hold_files(hold_folder_path, trunk_group_master_df, network_node_master_df, processed_files)
 
 if __name__ == "__main__":
     main()
