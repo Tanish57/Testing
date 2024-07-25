@@ -108,11 +108,11 @@ def apply_field_mapping(df, trunk_group_master_df, network_node_master_df):
                         .otherwise(col("network_node_master_df.FK_ORGA_FRAN"))) \
            .withColumn("BILLED_PRODUCT", when(col("incoming_product") != "", col("incoming_product"))
                         .otherwise(col("outgoing_product"))) \
-           .withColumn("CALL_COUNT", lit("1")) \
+                      .withColumn("CALL_COUNT", lit("1")) \
            .withColumn("RATING_COMPONENT", lit("TC")) \
            .withColumn("TIER", lit("INTRA")) \
            .withColumn("CURRENCY", lit("INR")) \
-                      .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
+           .withColumn("CASH_FLOW", when(col("incoming_path") == "", lit("R"))
                         .otherwise(lit("E"))) \
            .withColumn("ACTUAL_USAGE", substring(col("event_duration"), 1, 4).cast("int") * 3600 + 
                         substring(col("event_duration"), 5, 2).cast("int") * 60 + 
