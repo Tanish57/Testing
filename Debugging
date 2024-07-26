@@ -49,3 +49,13 @@ Backtrace:
 	BaseThreadInitThunk [0x74E67BA9+25]
 	RtlInitializeExceptionChain [0x7722BE3B+107]
 	RtlClearBits [0x7722BDBF+191]
+
+Traceback (most recent call last):
+  File "<stdin>", line 159, in <module>
+  File "<stdin>", line 156, in main
+  File "/usr/local/lib/python3.6/site-packages/pyspark/sql/readwriter.py", line 955, in csv
+    self._jwrite.csv(path)
+  File "/usr/local/lib/python3.6/site-packages/pyspark/python/lib/py4j-0.10.9.5-src.zip/py4j/java_gateway.py", line 1322, in __call__
+  File "/usr/local/lib/python3.6/site-packages/pyspark/sql/utils.py", line 117, in deco
+    raise converted from None
+pyspark.sql.utils.AnalysisException: Found duplicate column(s) when inserting into hdfs://JioBigDataLakeha/apps/hive/warehouse/dev_ops.db/ICTPOC/output_test: `id`, `name`
