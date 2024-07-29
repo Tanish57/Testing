@@ -1,34 +1,60 @@
+Trunk Group Master DataFrame
++----------------------------+
+|ID|NAME|FK_NNOD|OPERATOR|POI|
++----------------------------+
+|        AKOCH1VCE1N|Airte...|
+|        ABGLR1CCA1N|Airte...|
+|        ABGLR1CCE2N|Airte...|
+|        AKLKT1KCA1N|Airte...|
+|        AKLKT1KCE1N|Airte...|
+|        APUNE1MCA2N|Airte...|
+|        APUNE1MCE1N|Airte...|
+|        ABHPL1YCA2N|Airte...|
+|        ABHPL1YCE1N|Airte...|
+|        ARPUR1YCE1N|Airte...|
+|        AMUMB1ZCA2N|Airte...|
+|        AMUMB1ZCE1N|Airte...|
+|        ASLLG1NCE1N|Airte...|
+|        AHDBD1QAF1N|Airte...|
+|        AGWHT1AAF1N|Airte...|
+|        ASLLG2NAD1O|Airte...|
+|        ASLLG2NAF1O|Airte...|
+|        BAMBA1HCD1O|BSNL ...|
+|        BAMBA1HCD1O|BSNL ...|
+|        BAMBA1HCI1O|BSNL ...|
++----------------------------+
+only showing top 20 rows
+
+Network Node Master DataFrame
++--------------------+
+|ID|NAME|FK_ORGA_FRAN|
++--------------------+
+|EAA1ACCAS|RJIL Ac...|
+|EAA1ACCBH|RJIL Ac...|
+|EAA1ACCKO|RJIL Ac...|
+|EAA1ACCNE|RJIL Ac...|
+|EAA1ACCOR|RJIL Ac...|
+|EAA1ACCWB|RJIL Ac...|
+|NOA1ACCDL|RJIL Ac...|
+|NOA1ACCHP|RJIL Ac...|
+|NOA1ACCHR|RJIL Ac...|
+|NOA1ACCJK|RJIL Ac...|
+|NOA1ACCPB|RJIL Ac...|
+|NOA1ACCRJ|RJIL Ac...|
+|NOA1ACCUP|RJIL Ac...|
+|NOA1ACCUW|RJIL Ac...|
+|SOA1ACCAP|RJIL Ac...|
+|SOA1ACCKL|RJIL Ac...|
+|SOA1ACCKN|RJIL Ac...|
+|SOA1ACCTN|RJIL Ac...|
+|WEA1ACCGJ|RJIL Ac...|
+|WEA1ACCMH|RJIL Ac...|
++--------------------+
+only showing top 20 rows
+
 Traceback (most recent call last):
   File "<stdin>", line 199, in <module>
-  File "<stdin>", line 157, in main
-  File "<stdin>", line 77, in process_cdr_data
-  File "/usr/local/lib/python3.6/site-packages/pyspark/sql/dataframe.py", line 2478, in withColumn
-    return DataFrame(self._jdf.withColumn(colName, col._jc), self.sql_ctx)
-  File "/usr/local/lib/python3.6/site-packages/pyspark/python/lib/py4j-0.10.9.5-src.zip/py4j/java_gateway.py", line 1322, in __call__
-  File "/usr/local/lib/python3.6/site-packages/pyspark/sql/utils.py", line 117, in deco
-    raise converted from None
-pyspark.sql.utils.AnalysisException: cannot resolve 'filename' given input columns: [anum, bnum, data_unit, discrete_rating_parameter_1, event_direction, event_duration, event_start_date, event_start_time, incoming_node, incoming_path, incoming_product, link_field, outgoing_node, outgoing_path, outgoing_product, record_sequence_number, record_type, user_data, user_data_2, user_data_3, user_summarisation, value];
-'Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11530, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, user_data#11444, user_data_2#11464, link_field#11485, user_data_3#11507, regexp_extract('filename, \d{8}, 0) AS original_date#11553]
-+- Project [value#11255, incoming_node#11257, outgoing_node#11260, to_date('event_start_date, Some(yyyyMMdd)) AS event_start_date#11530, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, user_data#11444, user_data_2#11464, link_field#11485, user_data_3#11507]
-   +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, user_data#11444, user_data_2#11464, link_field#11485, CASE WHEN (substring(value#11255, 339, 80) <=> ) THEN NULL ELSE substring(value#11255, 339, 80) END AS user_data_3#11507]
-      +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, user_data#11444, user_data_2#11464, CASE WHEN (substring(value#11255, 337, 2) <=> ) THEN NULL ELSE substring(value#11255, 337, 2) END AS link_field#11485]
-         +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, user_data#11444, CASE WHEN (substring(value#11255, 307, 30) <=> ) THEN NULL ELSE substring(value#11255, 307, 30) END AS user_data_2#11464]
-            +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, user_summarisation#11425, CASE WHEN (substring(value#11255, 277, 30) <=> ) THEN NULL ELSE substring(value#11255, 277, 30) END AS user_data#11444]
-               +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, record_type#11407, CASE WHEN (substring(value#11255, 257, 20) <=> ) THEN NULL ELSE substring(value#11255, 257, 20) END AS user_summarisation#11425]
-                  +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, record_sequence_number#11390, CASE WHEN (substring(value#11255, 255, 2) <=> ) THEN NULL ELSE substring(value#11255, 255, 2) END AS record_type#11407]
-                     +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, data_unit#11374, CASE WHEN (substring(value#11255, 215, 40) <=> ) THEN NULL ELSE substring(value#11255, 215, 40) END AS record_sequence_number#11390]
-                        +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, discrete_rating_parameter_1#11359, CASE WHEN (substring(value#11255, 207, 8) <=> ) THEN NULL ELSE substring(value#11255, 207, 8) END AS data_unit#11374]
-                           +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, event_direction#11345, CASE WHEN (substring(value#11255, 192, 15) <=> ) THEN NULL ELSE substring(value#11255, 192, 15) END AS discrete_rating_parameter_1#11359]
-                              +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, outgoing_product#11332, CASE WHEN (substring(value#11255, 191, 1) <=> ) THEN NULL ELSE substring(value#11255, 191, 1) END AS event_direction#11345]
-                                 +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, incoming_product#11320, CASE WHEN (substring(value#11255, 177, 14) <=> ) THEN NULL ELSE substring(value#11255, 177, 14) END AS outgoing_product#11332]
-                                    +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, outgoing_path#11309, CASE WHEN (substring(value#11255, 163, 14) <=> ) THEN NULL ELSE substring(value#11255, 163, 14) END AS incoming_product#11320]
-                                       +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, incoming_path#11299, CASE WHEN (substring(value#11255, 143, 20) <=> ) THEN NULL ELSE substring(value#11255, 143, 20) END AS outgoing_path#11309]
-                                          +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, bnum#11290, CASE WHEN (substring(value#11255, 123, 20) <=> ) THEN NULL ELSE substring(value#11255, 123, 20) END AS incoming_path#11299]
-                                             +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, anum#11282, CASE WHEN (substring(value#11255, 95, 28) <=> ) THEN NULL ELSE substring(value#11255, 95, 28) END AS bnum#11290]
-                                                +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, event_duration#11275, CASE WHEN (substring(value#11255, 67, 28) <=> ) THEN NULL ELSE substring(value#11255, 67, 28) END AS anum#11282]
-                                                   +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, event_start_time#11269, CASE WHEN (substring(value#11255, 57, 10) <=> ) THEN NULL ELSE substring(value#11255, 57, 10) END AS event_duration#11275]
-                                                      +- Project [value#11255, incoming_node#11257, outgoing_node#11260, event_start_date#11264, CASE WHEN (substring(value#11255, 49, 8) <=> ) THEN NULL ELSE substring(value#11255, 49, 8) END AS event_start_time#11269]
-                                                         +- Project [value#11255, incoming_node#11257, outgoing_node#11260, CASE WHEN (substring(value#11255, 41, 8) <=> ) THEN NULL ELSE substring(value#11255, 41, 8) END AS event_start_date#11264]
-                                                            +- Project [value#11255, incoming_node#11257, CASE WHEN (substring(value#11255, 21, 20) <=> ) THEN NULL ELSE substring(value#11255, 21, 20) END AS outgoing_node#11260]
-                                                               +- Project [value#11255, CASE WHEN (substring(value#11255, 1, 20) <=> ) THEN NULL ELSE substring(value#11255, 1, 20) END AS incoming_node#11257]
-                                                                  +- Relation [value#11255] text
+  File "<stdin>", line 170, in main
+  File "/usr/local/lib/python3.6/site-packages/pyspark/sql/dataframe.py", line 1660, in __getattr__
+    "'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
+AttributeError: 'DataFrame' object has no attribute 'ID'
